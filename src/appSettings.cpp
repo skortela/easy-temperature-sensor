@@ -57,7 +57,7 @@ void AppSettings::print()
     Serial.println("AppSettings:");
     
     Serial.print("m_deviceHostname: ");    Serial.println(m_deviceHostname);
-    for (int i=0; i< strlen(m_deviceHostname); i++) {
+    for (size_t i=0; i< strlen(m_deviceHostname); i++) {
         Serial.print(m_deviceHostname[i]);
         Serial.print(" 0x");
          Serial.println((int)m_deviceHostname[i]);

@@ -27,7 +27,7 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 template <class T> int EEPROM_writeAnything(EepromStream* pStream, const T& value)
 {
     const byte* p = (const byte*)(const void*)&value;
-    int i;
+    unsigned int i;
     for (i = 0; i < sizeof(value); i++)
         pStream->writeInt8(*p++);
     return i;
@@ -36,7 +36,7 @@ template <class T> int EEPROM_writeAnything(EepromStream* pStream, const T& valu
 template <class T> int EEPROM_readAnything(EepromStream* pStream, T& value)
 {
     byte* p = (byte*)(void*)&value;
-    int i;
+    unsigned int i;
     for (i = 0; i < sizeof(value); i++)
         *p++ = pStream->readInt8();
     return i;

@@ -56,7 +56,7 @@ void Sensors::searchNewSensors(bool& newSensorsFound)
     newSensorsFound = false;
     DeviceAddress addr;
 
-    char buffer[10];
+    char buffer[19];
     char* pBuffer;
 
     m_oneWire.reset_search();
