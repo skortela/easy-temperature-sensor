@@ -34,7 +34,6 @@
 #include "sensons.h"
 
 static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><h1>%s</h1></body></html>";
-static const char KMETA_TAG[] PROGMEM = "<meta charset=\"UTF-8\">";
 
 AsyncWebServer server(80);
 DNSServer dns;
@@ -358,7 +357,7 @@ void wifiSetup()
 
     AsyncWiFiManager wifiManager(&server,&dns);
 
-    wifiManager.setCustomHeadElement(KMETA_TAG);
+    wifiManager.setCustomHeadElement("<meta charset=\"UTF-8\">");
 
     //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
     wifiManager.setAPCallback(configModeCallback);
