@@ -428,6 +428,12 @@ void wifiSetup()
         Serial.println("config saved");
     }
 
+    bool ok = WiFi.hostname(m_settings.m_deviceHostname);
+    if (!ok) {
+        Serial.println("Failed to se hostname!");
+    }
+
+
     Serial.println("Connected");
     Serial.println("local ip");
     Serial.println(WiFi.localIP());
@@ -780,7 +786,6 @@ void setup() {
 
         AsyncResponseStream *response = request->beginResponseStream("text/html");
         response->printf_P(KINDEX_HTML, m_settings.m_deviceHostname);
-        //response->printf("<!DOCTYPE html><html><head><title>Webpage at %s</title></head><body>", request->url().c_str());
         //send the response last
         request->send(response);
     });
