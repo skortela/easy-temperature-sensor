@@ -32,6 +32,11 @@
 #include <utils.h>
 #include "haintegration.h"
 #include "sensons.h"
+#include "config.h"
+#include "jsonutils.h"
+
+#define ST(A) #A
+#define STR(A) ST(A)
 
 static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><h1>%s</h1></body></html>";
 
@@ -40,8 +45,6 @@ DNSServer dns;
 
 //WiFiManager wifiManager;
 AppSettings m_settings;
-
-
 
 //flag for saving data
 bool m_shouldSaveConfig = false;
@@ -57,7 +60,6 @@ Sensors m_sensors;
 
 unsigned long m_lastStatusUpdate;
 unsigned long m_lastInfoUpdate;
-
 
 
 void blink() {
@@ -208,8 +210,7 @@ void initSensors() {
 }
 
 void initOTA() {
-    //m_udp.begin(KUdpLocalPort);
-
+#ifdef ENABLE_OTA
     // Port defaults to 8266
     // ArduinoOTA.setPort(8266);
 
@@ -219,38 +220,27 @@ void initOTA() {
     Serial.print("FreeSketchSpace: ");
     Serial.println(ESP.getFreeSketchSpace());
     
-
-    // No authentication by default
-    ArduinoOTA.setPassword("your-secret-password");
+#ifdef OTA_PASSWD
+    // Require password
+    ArduinoOTA.setPassword(STR(OTA_PASSWD));
+#else
+    #pragma message "Warning: no OTA password"
+    Serial.println("Warning! no OTA password defined");
+#endif
 
     ArduinoOTA.onStart([]() {
         m_mqttClient.disconnect();
-        //lcd.clear();
-        //lcd.setCursor(0, 0);
-        //lcd.print("OTA: Updating");
         Serial.println("OTA updating");
     });
     ArduinoOTA.onEnd([]() {
-        /*lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("OTA: Update finished");
-        lcd.setCursor(5, 1);
-        lcd.print("Rebooting");*/
         Serial.println("Update finished, rebooting");
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
         int prog = progress / (total / 100);
         Serial.printf("Progress: %u%%\r", prog);
-        
-        //lcd.setCursor(6, 2);
-        //lcd.print(prog);
     });
     ArduinoOTA.onError([](ota_error_t error) {
         Serial.printf("Update error [%u]: ", error);
-        //Serial.printf("Error[%u]: ", error);
-        //lcd.setCursor(3, 2);
-        //lcd.print("Update error");
-        //lcd.setCursor(3, 3);
         if (error == OTA_AUTH_ERROR) {Serial.println("Auth Failed");}
         else if (error == OTA_BEGIN_ERROR) {Serial.println("Begin Failed");}
         else if (error == OTA_CONNECT_ERROR) {Serial.println("Connect Failed");}
@@ -259,64 +249,12 @@ void initOTA() {
         else {Serial.println("Unknown error");}
     });
     ArduinoOTA.begin();
-}
-
-void addSensorsToArray(JsonArray& jsonArr)
-{
-    DeviceAddress addr;
-    char addrStr[19];
-
-    const node_t* pSensor = m_sensors.sensormap()->begin();
-    while (pSensor) {
-
-        JsonObject sensorObj = jsonArr.createNestedObject();
-
-        uint64toUInt8Array(pSensor->addr, addr);
-        addressToStr(addr, addrStr);
-
-        char sensorName[30];
-        strncpy(sensorName, pSensor->pName, sizeof(sensorName));
-        sensorObj["name"] = sensorName;
-        sensorObj["address"] = addrStr;
-        if (pSensor->averageTemp.isValid())
-        {
-            sensorObj["temperature"] = round2(pSensor->averageTemp.value());
-            sensorObj["available"].set(true);
-        }
-        else {
-            sensorObj["temperature"] = nullptr;
-            sensorObj["available"].set(false);
-        }
-        sensorObj["offset"] = pSensor->offset;
-
-        pSensor = pSensor->next;
-    }
-}
-
-// caller is responsible to free the returned pointer
-char* createSensorsArr()
-{
-    StaticJsonDocument<800> doc;
-    JsonArray arr = doc.to<JsonArray>();
-
-    addSensorsToArray(arr);
-
-    char* pJsonBuffer = (char*) malloc(800);
-
-    serializeJson(arr, pJsonBuffer, 800);
-    return pJsonBuffer;
-}
-
-
-void addSensorsObj(JsonObject& root)
-{
-    JsonArray sensorsArr = root.createNestedArray("sensors");
-    addSensorsToArray(sensorsArr);
+#endif
 }
 
 void sendSensorsInfo() {
     Serial.println("sending info");
-    char* jsonBuffer = createSensorsArr();
+    char* jsonBuffer = createSensorsArr(m_sensors.sensormap());
     bool ok = m_mqttClient.publish(m_settings.topic("sensors").c_str(), jsonBuffer);
     free (jsonBuffer);
     if (!ok) {
@@ -564,7 +502,7 @@ char* infoJson()
     root["mac"] = WiFi.macAddress();
     root["hostname"] = WiFi.hostname();
 
-    addSensorsObj(root);
+    addSensorsObj(m_sensors.sensormap(), root);
 
     char* jsonBuffer = (char*)malloc(800);
     serializeJson(root, jsonBuffer, 800);
@@ -718,10 +656,6 @@ void mqtt_reconnect() {
     m_led_ticker.detach();
 }
 
-void notFound(AsyncWebServerRequest *request) {
-    request->send(404, "text/plain", "Not found");
-}
-
 void setup() {
     Serial.begin(115200);
     Serial.println("\n\nStarted");
@@ -800,7 +734,7 @@ void setup() {
         free(pJsonBuffer);
     });
     server.on("/sensors", HTTP_GET, [](AsyncWebServerRequest *request){
-        char* pJsonBuffer = createSensorsArr();
+        char* pJsonBuffer = createSensorsArr(m_sensors.sensormap());
         Serial.println("sending sensors");
         //Serial.println(pJsonBuffer);
         request->send(200, "application/json", pJsonBuffer);
@@ -829,7 +763,9 @@ void setup() {
     });
     server.addHandler(handler);*/
 
-    server.onNotFound(notFound);
+    server.onNotFound( [](AsyncWebServerRequest *request) {
+        request->send(404, "text/plain", "Not found");
+    });
     server.begin();
 
     delay(1000);

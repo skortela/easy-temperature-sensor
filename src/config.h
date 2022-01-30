@@ -23,8 +23,7 @@ extern const int KTickerIntervalMQTTConnect;
 extern const int32_t KConfigValidationMagic;
 */
 
-#define ONE_WIRE_PIN D7 // pannuhuone
-//#define ONE_WIRE_PIN D6 // other
+#define ONE_WIRE_PIN D7
 #define KResetPin D5
 
 #define KDefaultMqttPort 1883
