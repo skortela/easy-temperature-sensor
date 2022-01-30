@@ -57,15 +57,10 @@ void AppSettings::print()
     Serial.println("AppSettings:");
     
     Serial.print("m_deviceHostname: ");    Serial.println(m_deviceHostname);
-    for (size_t i=0; i< strlen(m_deviceHostname); i++) {
-        Serial.print(m_deviceHostname[i]);
-        Serial.print(" 0x");
-         Serial.println((int)m_deviceHostname[i]);
-    }
     Serial.print("m_mqtt_server: ");    Serial.println(m_mqtt_server);
     Serial.print("m_mqtt_port: ");      Serial.println(m_mqtt_port);
     Serial.print("m_mqtt_user: ");      Serial.println(m_mqtt_user);
-    Serial.print("m_mqtt_passw: ");     Serial.println(m_mqtt_passw);
+    //Serial.print("m_mqtt_passw: ");     Serial.println(m_mqtt_passw);
     //Serial.print("m_oneWirePin: ");     Serial.println(m_oneWirePin);
     Serial.print("m_availabilityTopic: "); Serial.println(m_availabilityTopic);
     Serial.print("m_commandListen: ");     Serial.println(m_commandListen);
