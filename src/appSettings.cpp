@@ -13,7 +13,9 @@
 
 AppSettings::AppSettings() :  m_mqtt_server(NULL), m_mqtt_port(KDefaultMqttPort), m_mqtt_user(NULL), m_mqtt_passw(NULL), m_availabilityTopic(NULL), m_commandListen(NULL), m_stateTopic(NULL), m_infoTopic(NULL)
 {
-    setDeviceHostname(KDeviceDefaultHostname);
+    char buffer[50];
+    sprintf(buffer, "%s-%X", KDeviceDefaultHostname, ESP.getChipId());
+    setDeviceHostname(buffer);
 }
 AppSettings::~AppSettings()
 {

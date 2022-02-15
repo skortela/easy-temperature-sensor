@@ -3,7 +3,7 @@
 
 #include <inttypes.h>
 
-#define KDeviceDefaultHostname "TemperatureMqtt"
+#define KDeviceDefaultHostname "easy-temperature-sensor"
 #define KDefaultAvailabilityTopic "/availability"
 #define KDefaultCommandTopic "/cmd/#"
 #define KDefaultStateTopic "/state"
