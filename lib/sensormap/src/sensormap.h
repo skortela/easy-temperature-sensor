@@ -9,6 +9,7 @@ typedef struct node {
     char* pName;
     float offset; // temperature offset
     AverageTemperature averageTemp;
+    uint8_t busIndex;
     struct node * next;
 } node_t;
 
@@ -19,11 +20,12 @@ class Sensormap {
         Sensormap();
         ~Sensormap();
         
-        void addSensor(uint64_t addr, const char* name, float offset);
+        void addSensor(uint8_t busIndex, uint64_t addr, const char* name, float offset);
         bool rename(uint64_t addr, const char* name);
         bool rename(const char* oldName, const char* newName);
         // get sensorname of addr, or NULL if not found
         const char*  getSensorName(uint64_t addr) const;
+        node_t* getSensorNode(uint64_t addr) const;
         float getSensorOffset(uint64_t addr) const;
         //bool setSensorOffset(uint64_t addr, float offset);
         bool setSensorOffset(const char* pSensorName, float offset);

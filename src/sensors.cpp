@@ -18,8 +18,13 @@ void Sensors::begin()
     m_oneWire.begin(ONE_WIRE_PIN);
     m_dallas.setOneWire(&m_oneWire);
     m_dallas.setResolution(12);
-
     m_dallas.requestTemperatures();
+#ifdef ONE_WIRE_PIN_2
+    m_oneWire2.begin(ONE_WIRE_PIN_2);
+    m_dallas2.setOneWire(&m_oneWire2);
+    m_dallas2.setResolution(12);
+    m_dallas2.requestTemperatures();
+#endif
     m_hasTemperaturesRead = false;
     m_lastTemperatureRequestTime = millis();
 }
@@ -28,6 +33,9 @@ void Sensors::loop()
 {
     if (m_lastTemperatureRequestTime == 0 || (unsigned long)(millis() - m_lastTemperatureRequestTime) > 5000) {
         m_dallas.requestTemperatures();
+#ifdef ONE_WIRE_PIN_2
+        m_dallas2.requestTemperatures();
+#endif
         m_hasTemperaturesRead = false;
         m_lastTemperatureRequestTime = millis();
     }
@@ -38,7 +46,18 @@ void Sensors::loop()
         node_t* pSensor = m_sensorNameMap.begin();
         while (pSensor) {
             uint64toUInt8Array(pSensor->addr, addr);
-            pSensor->averageTemp.addValue(m_dallas.getTempC(addr));
+            float temp(DEVICE_DISCONNECTED_C);
+            if (pSensor->busIndex == 0) {
+                temp = m_dallas.getTempC(addr);
+            }
+            else if (pSensor->busIndex == 1) {
+#ifdef ONE_WIRE_PIN_2
+                temp = m_dallas2.getTempC(addr);
+#endif
+            }
+
+            pSensor->averageTemp.addValue(temp);
+            
             pSensor = pSensor->next;
         }
         if (!m_ready)
@@ -50,25 +69,25 @@ bool Sensors::isReady() const {
     return m_ready;
 }
 
-void Sensors::searchNewSensors(bool& newSensorsFound)
+void searchSensors(OneWire* pOneWire, DallasTemperature* pDallas, uint8_t busIndex, Sensormap* pSensorMap, bool& newSensorsFound)
 {
-    Serial.println("initSensors");
-    newSensorsFound = false;
     DeviceAddress addr;
 
     char buffer[19];
     char* pBuffer;
+    int foundCount = 0;
 
-    m_oneWire.reset_search();
-	while ( m_oneWire.search(addr)) {
-		if (m_dallas.validAddress(addr)) {
-            Serial.println("found sensor");
+    pOneWire->reset_search();
+	while ( pOneWire->search(addr)) {
+		if (pDallas->validAddress(addr)) {
+            foundCount++;
             uint64_t uint64Addr = arrayToUint64(addr);
-            //Serial.print("uint64Addr: ");
-            //    Serial.println(uint64Addr);
-
-            const char* sensorName = m_sensorNameMap.getSensorName(uint64Addr);
-            if (!sensorName)
+            Serial.print("found sensor: ");
+            Serial.println(uint64Addr, 16);
+            
+            //const char* sensorName = pSensorMap->getSensorName(uint64Addr);
+            node_t* pSensorNode = pSensorMap->getSensorNode(uint64Addr);
+            if (!pSensorNode)
             {
                 Serial.println(" no name");
                 //addressToStr(addr, addrStr);
@@ -80,19 +99,39 @@ void Sensors::searchNewSensors(bool& newSensorsFound)
 
                 pBuffer = &buffer[0];
 
-                sprintf(pBuffer, "sensor_%d", m_sensorNameMap.count()+1);
+                sprintf(pBuffer, "sensor_%d", pSensorMap->count()+1);
 
                 Serial.print("new: ");
                 Serial.println(pBuffer);
                 // Add as new sensor
-                m_sensorNameMap.addSensor(uint64Addr, pBuffer, 0);
+                pSensorMap->addSensor(busIndex, uint64Addr, pBuffer, 0);
                 newSensorsFound = true;
             }
             else {
-                Serial.println("got name");
+
+                Serial.print("name: ");
+                Serial.println(pSensorNode->pName);
+                // make sure busIndex is correct (user may have changed sensor to another bus)
+                pSensorNode->busIndex = busIndex;
             }
         }
-	}
+    }
+
+    if (!foundCount) {
+        Serial.print("Warning! Sensors not found from bus index: ");
+        Serial.println(busIndex);
+    }
+}
+
+void Sensors::searchNewSensors(bool& newSensorsFound)
+{
+    Serial.println("initSensors");
+    newSensorsFound = false;
+
+    searchSensors(&m_oneWire, &m_dallas, 0, &m_sensorNameMap, newSensorsFound);
+#ifdef ONE_WIRE_PIN_2
+    searchSensors(&m_oneWire2, &m_dallas2, 1, &m_sensorNameMap, newSensorsFound);
+#endif
 }
 
 Sensormap* Sensors::sensormap()

@@ -1,6 +1,7 @@
 #include "sensormap.h"
 #include "OneWire.h"
 #include "DallasTemperature.h"
+#include "config.h"
 
 class Sensors
 {
@@ -27,4 +28,9 @@ class Sensors
 
         OneWire m_oneWire;
         DallasTemperature m_dallas;
+#ifdef ONE_WIRE_PIN_2
+        OneWire m_oneWire2;
+        DallasTemperature m_dallas2;
+#endif
+        
 };

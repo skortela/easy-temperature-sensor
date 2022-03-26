@@ -88,12 +88,17 @@ bool loadConfig() {
     EepromStream stream;
    
     stream.setUnderlyingData( const_cast<uint8_t*>(EEPROM.getConstDataPtr()), 150);
-
-    if (stream.readInt32() != KConfigValidationMagic)
+    
+    int32_t i = stream.readInt32();
+    Serial.println("conf int:");
+    Serial.println(i);
+    if (i != KConfigValidationMagic)
     {
+        Serial.println("no config");
         // no existing configuration
         return false;
     }
+    Serial.println("loading config");
     m_settings.clear();
     m_settings.setDeviceHostname(stream.readString());
     m_settings.m_mqtt_server = stream.readStringDup();
@@ -104,16 +109,17 @@ bool loadConfig() {
 
     Sensormap* pSensors = m_sensors.sensormap();
     while (stream.readInt8() == 1) { // first byte tells is there more devices (0 = no, 1 = yes)
+        uint8_t busIndex = stream.readInt8();
         uint64_t addr = stream.readInt64();
         const char* pName = stream.readString();
         float offset = stream.readFloat();
-        pSensors->addSensor(addr, pName, offset);
+        pSensors->addSensor(busIndex, addr, pName, offset);
     }
     return true;
 }
 
 void saveConfig() {
-    Serial.print("saveConfig");
+    Serial.println("saveConfig");
     /*
     Serial.print("arg count: ");  Serial.println(wifiManager.server->args());
     for (int i=0; i< wifiManager.server->args(); i++)
@@ -146,9 +152,11 @@ void saveConfig() {
     const node_t* pSensorNode = pSensors->getNext();
     while(pSensorNode) {
         stream.writeInt8(1); // has more
+        stream.writeInt8(pSensorNode->busIndex);
         stream.writeInt64(pSensorNode->addr);
         stream.writeString(pSensorNode->pName);
         stream.writeFloat(pSensorNode->offset);
+        
         pSensorNode = pSensors->getNext();
     }
     stream.writeInt8(0); // no more 
@@ -209,8 +217,8 @@ void initSensors() {
         saveConfig();
 }
 
-void initOTA() {
 #ifdef ENABLE_OTA
+void initOTA() {
     // Port defaults to 8266
     // ArduinoOTA.setPort(8266);
 
@@ -249,8 +257,8 @@ void initOTA() {
         else {Serial.println("Unknown error");}
     });
     ArduinoOTA.begin();
-#endif
 }
+#endif
 
 void sendSensorsInfo() {
     Serial.println("sending info");
@@ -612,6 +620,12 @@ void mqtt_reconnect() {
     // Loop until we're reconnected
     while (!m_mqttClient.connected()) {
 
+        if (!m_settings.isValid()) {
+            //Serial.println("Settings are not valid!");
+            return;
+        }
+        m_mqttClient.setServer(m_settings.m_mqtt_server, m_settings.m_mqtt_port);
+
         Serial.print("Attempting MQTT connection...");
         // Create a random client ID
         String clientId = "temperaturemqtt-";
@@ -658,6 +672,11 @@ void mqtt_reconnect() {
 
 void setup() {
     Serial.begin(115200);
+    /*for (int i=0; i< 20;i++) {
+        Serial.println("starting..");
+        delay(100);
+        yield();
+    }*/
     Serial.println("\n\nStarted");
 
     EEPROM.begin(300);
@@ -678,6 +697,7 @@ void setup() {
     m_sensors.begin();
 
     bool hasConfig = loadConfig();
+    
     if (!hasConfig && WiFi.SSID() != "") {
         // does not have valid config, but has saved SSID?
         // Misconfigured, reset settings
@@ -698,15 +718,31 @@ void setup() {
     Serial.print("last used SSID: ");
     Serial.println(WiFi.SSID());
 
-    wifiSetup();
+#ifdef WIFI_SSID
 
-    boolean ok = m_mqttClient.setBufferSize(800);
-    Serial.print("setBufferSize: ");
-    Serial.println(ok);
-    m_mqttClient.setServer(m_settings.m_mqtt_server, m_settings.m_mqtt_port);
+    wl_status_t st = WiFi.begin(STR(WIFI_SSID),STR(WIFI_PW));
+    Serial.print("wl_status_t: ");
+    Serial.println(st);
+    Serial.print("Connecting to: ");
+    Serial.println(STR(WIFI_SSID));
+    // Keep checking the connection status until it is connected
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(10);
+        yield();
+    }
+    Serial.print("Connected, local ip: ");
+    Serial.println(WiFi.localIP());
+    WiFi.hostname(m_settings.m_deviceHostname);
+#else
+    wifiSetup();
+#endif
+
+    m_mqttClient.setBufferSize(800);
     m_mqttClient.setCallback(mqtt_message_received);
 
+#ifdef ENABLE_OTA
     initOTA();
+#endif
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
         //char* pBuffer = new char[300];
@@ -775,7 +811,9 @@ void setup() {
 
 void loop() {
     m_sensors.loop();
+#ifdef ENABLE_OTA
     ArduinoOTA.handle();
+#endif
     checkResetButton();
 
     if (!m_mqttClient.connected()) {

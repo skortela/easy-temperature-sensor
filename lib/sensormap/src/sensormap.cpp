@@ -22,13 +22,14 @@ Sensormap::~Sensormap()
     }
 }
 
-void Sensormap::addSensor(uint64_t addr, const char* name, float offset)
+void Sensormap::addSensor(uint8_t busIndex, uint64_t addr, const char* name, float offset)
 {
     node_t* pNew = new node_t;
     pNew->addr = addr;
     pNew->pName = strdup(name);
     pNew->next = NULL;
     pNew->offset = offset;
+    pNew->busIndex = busIndex;
 
     if (!m_pBegin)
         m_pBegin = pNew;
@@ -83,6 +84,18 @@ const char* Sensormap::getSensorName(uint64_t addr) const
             else {
                 p = p->next;
             }
+        }
+    }
+    return NULL;
+}
+node_t* Sensormap::getSensorNode(uint64_t addr) const
+{
+    node_t* p = m_pBegin;
+    while (p) {
+        if (p->addr == addr)
+            return p;
+        else {
+            p = p->next;
         }
     }
     return NULL;
@@ -158,7 +171,13 @@ bool Sensormap::removeSensor(uint64_t addr)
 }
 int Sensormap::count() const
 {
-    return 0;
+    int count(0);
+    node_t* p = m_pBegin;
+    while (p) {
+        count++;
+        p = p->next;
+    }
+    return count;
 }
 
 // set search pointer to begin

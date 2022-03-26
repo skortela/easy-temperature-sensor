@@ -107,3 +107,14 @@ String AppSettings::topic(const char* pPostFix) const
         ret += String("/") + String(pPostFix);
     return ret;
 }
+
+bool AppSettings::isValid() const
+{
+    // make sure settings are not null
+    bool valid = (m_mqtt_server != NULL && m_mqtt_user != NULL && m_mqtt_passw != NULL);
+    if (valid) {
+        // make sure settings are not empty
+        valid = strlen(m_mqtt_server) != 0 && strlen(m_mqtt_user) && strlen(m_mqtt_passw);
+    }
+    return valid;
+}

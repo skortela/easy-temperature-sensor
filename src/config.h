@@ -23,7 +23,8 @@ extern const int KTickerIntervalMQTTConnect;
 extern const int32_t KConfigValidationMagic;
 */
 
-#define ONE_WIRE_PIN D7
+#define ONE_WIRE_PIN D4
+#define ONE_WIRE_PIN_2 D2
 #define KResetPin D5
 
 #define KDefaultMqttPort 1883
@@ -39,7 +40,7 @@ extern const int32_t KConfigValidationMagic;
 #define KTickerIntervalMQTTConnect 1000
 
 // Magic number to check if eeprom config is valid
-#define KConfigValidationMagic 0x09278263
+const int32_t KConfigValidationMagic = 0x09278269;
 
 #define KHADiscoveryPrefix "homeassistant"
 

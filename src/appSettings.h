@@ -17,6 +17,8 @@ class AppSettings {
 
         String topic(const char* pPostFix = NULL) const;
 
+        bool isValid() const;
+
     public:
         char* m_deviceHostname;
         char* m_mqtt_server;
