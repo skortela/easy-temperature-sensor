@@ -25,12 +25,8 @@ class Sensors
         bool m_hasTemperaturesRead;
         bool m_ready;
         Sensormap m_sensorNameMap;
-
-        OneWire m_oneWire;
-        DallasTemperature m_dallas;
-#ifdef ONE_WIRE_PIN_2
-        OneWire m_oneWire2;
-        DallasTemperature m_dallas2;
-#endif
+        
+        OneWire m_oneWire[ONE_WIRE_BUS_COUNT];
+        DallasTemperature m_dallas[ONE_WIRE_BUS_COUNT];
         
 };

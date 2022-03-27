@@ -38,7 +38,7 @@
 #define ST(A) #A
 #define STR(A) ST(A)
 
-static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><h1>%s</h1></body></html>";
+static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><h1>%s</h1><br><a href=\"sensors\">View sensors</a></body></html>";
 
 AsyncWebServer server(80);
 DNSServer dns;

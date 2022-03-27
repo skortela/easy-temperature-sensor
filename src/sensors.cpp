@@ -10,21 +10,17 @@ Sensors::Sensors()
 }
 Sensors::~Sensors()
 {
-
 }
 
 void Sensors::begin()
 {
-    m_oneWire.begin(ONE_WIRE_PIN);
-    m_dallas.setOneWire(&m_oneWire);
-    m_dallas.setResolution(12);
-    m_dallas.requestTemperatures();
-#ifdef ONE_WIRE_PIN_2
-    m_oneWire2.begin(ONE_WIRE_PIN_2);
-    m_dallas2.setOneWire(&m_oneWire2);
-    m_dallas2.setResolution(12);
-    m_dallas2.requestTemperatures();
-#endif
+    for (int i=0; i<ONE_WIRE_BUS_COUNT; i++) {
+        m_oneWire[i].begin(KOneWirePin[i]);
+        m_dallas[i].setOneWire(&m_oneWire[i]);
+        m_dallas[i].setResolution(12);
+        m_dallas[i].setWaitForConversion(false);
+        m_dallas[i].requestTemperatures();
+    }
     m_hasTemperaturesRead = false;
     m_lastTemperatureRequestTime = millis();
 }
@@ -32,10 +28,9 @@ void Sensors::begin()
 void Sensors::loop()
 {
     if (m_lastTemperatureRequestTime == 0 || (unsigned long)(millis() - m_lastTemperatureRequestTime) > 5000) {
-        m_dallas.requestTemperatures();
-#ifdef ONE_WIRE_PIN_2
-        m_dallas2.requestTemperatures();
-#endif
+        for (int i=0; i<ONE_WIRE_BUS_COUNT; i++) {
+            m_dallas[i].requestTemperatures();
+        }
         m_hasTemperaturesRead = false;
         m_lastTemperatureRequestTime = millis();
     }
@@ -47,13 +42,8 @@ void Sensors::loop()
         while (pSensor) {
             uint64toUInt8Array(pSensor->addr, addr);
             float temp(DEVICE_DISCONNECTED_C);
-            if (pSensor->busIndex == 0) {
-                temp = m_dallas.getTempC(addr);
-            }
-            else if (pSensor->busIndex == 1) {
-#ifdef ONE_WIRE_PIN_2
-                temp = m_dallas2.getTempC(addr);
-#endif
+            if (pSensor->busIndex < ONE_WIRE_BUS_COUNT) {
+                temp = m_dallas[pSensor->busIndex].getTempC(addr);
             }
 
             pSensor->averageTemp.addValue(temp);
@@ -85,7 +75,6 @@ void searchSensors(OneWire* pOneWire, DallasTemperature* pDallas, uint8_t busInd
             Serial.print("found sensor: ");
             Serial.println(uint64Addr, 16);
             
-            //const char* sensorName = pSensorMap->getSensorName(uint64Addr);
             node_t* pSensorNode = pSensorMap->getSensorNode(uint64Addr);
             if (!pSensorNode)
             {
@@ -128,10 +117,9 @@ void Sensors::searchNewSensors(bool& newSensorsFound)
     Serial.println("initSensors");
     newSensorsFound = false;
 
-    searchSensors(&m_oneWire, &m_dallas, 0, &m_sensorNameMap, newSensorsFound);
-#ifdef ONE_WIRE_PIN_2
-    searchSensors(&m_oneWire2, &m_dallas2, 1, &m_sensorNameMap, newSensorsFound);
-#endif
+    for (int i=0; i<ONE_WIRE_BUS_COUNT; i++) {
+        searchSensors(&m_oneWire[i], &m_dallas[i], i, &m_sensorNameMap, newSensorsFound);
+    }
 }
 
 Sensormap* Sensors::sensormap()
