@@ -38,7 +38,8 @@
 #define ST(A) #A
 #define STR(A) ST(A)
 
-static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><h1>%s</h1><br><a href=\"sensors\">View sensors</a></body></html>";
+//static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><h1>%s</h1><br><a href=\"sensors\">View sensors</a></body></html>";
+static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html lang=\"en\"><head> <meta charset=\"UTF-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/> <title></title> <link rel=\"icon\" href=\"data:,\"></head><body><style>.block_main{margin: auto; width: 60%; /* border: 5px solid #FFFF00; */ padding: 10px; font-size: x-large;}.block_container{text-align:left; padding-top: 15px;}.block_right{display:inline;}.block_right_green{display:inline; color: green;}.block_right_red{display:inline; color: red;}.block_left{display:inline-block; width: 200px; /* border: 5px solid #FFFF00; */}</style><div class=\"block_main\"> <div class=\"block_container\"> <h1></h1><br><div class=\"block_left\">MQTT status:</div><div class=\"block_right\" id=\"mqtt_status\"></div></div><div class=\"block_container\" id=\"sensors\"></div></div></body><script>function refreshTimeout(){\"visible\"===document.visibilityState&&(reloadData(),setTimeout(refreshTimeout,5e3))}function reloadData(){fetch(\"wstatus\").then(e=>{if(200===e.status)e.json().then(e=>populateByJson(e));else{if(401!==e.status)throw\"http_err\";location.reload()}}).catch(e=>{document.getElementById(\"mqtt_status\").innerText=\"\",document.getElementById(\"sensors\").innerHTML=\"<p>Network error!</p>\"})}function populateByJson(e){document.title=e.hostname,document.querySelector(\"h1\").innerHTML=e.hostname;let t=document.getElementById(\"mqtt_status\");t.innerText=e.mqtt_status,\"connected\"==e.mqtt_status?t.className=\"block_right_green\":t.className=\"block_right_red\";let n=document.getElementById(\"sensors\");n.innerHTML=\"\";let o=e.sensors;if(o.length>0)for(i=0;i<o.length;i++){let e=document.createElement(\"div\");e.className=\"block_container\";let t=document.createElement(\"div\");t.className=\"block_left\",t.textContent=o[i].name+\": \",e.appendChild(t),t=document.createElement(\"div\"),!0===o[i].available?(t.textContent=o[i].temperature+\" ℃\",t.className=\"block_right\"):(t.textContent=\"Not connected\",t.className=\"block_right_red\"),e.appendChild(t),n.appendChild(e)}else n.innerHTML=\"<p>No sensors connected!</p>\"}window.onload=function(){refreshTimeout()},document.addEventListener(\"visibilitychange\",function(){\"visible\"===document.visibilityState&&refreshTimeout()});</script></html>";
 
 AsyncWebServer server(80);
 DNSServer dns;
@@ -540,6 +541,60 @@ char* getConfig() {
     return pJsonBuffer;
 }
 
+char* getWStatusJson() {
+    StaticJsonDocument<500> doc;
+    JsonObject root = doc.to<JsonObject>();
+
+    root["hostname"] = m_settings.m_deviceHostname;
+
+    if (!m_settings.isValid()) {
+        root["mqtt_status"] = "not configured";
+    }
+    else {
+        switch (m_mqttClient.state()) {
+            case MQTT_CONNECTION_TIMEOUT:
+                root["mqtt_status"] = "connection timeout";
+                break;
+            case MQTT_CONNECTION_LOST:
+                root["mqtt_status"] = "connection lost";
+                break;
+            case MQTT_CONNECT_FAILED:
+                root["mqtt_status"] = "connection failed";
+                break;
+            case MQTT_DISCONNECTED:
+                root["mqtt_status"] = "disconnect";
+                break;
+            case MQTT_CONNECTED:
+                root["mqtt_status"] = "connected";
+                break;
+            case MQTT_CONNECT_BAD_PROTOCOL:
+                root["mqtt_status"] = "bad protocol";
+                break;
+            case MQTT_CONNECT_BAD_CLIENT_ID:
+                root["mqtt_status"] = "bad client id";
+                break;
+            case MQTT_CONNECT_UNAVAILABLE:
+                root["mqtt_status"] = "unavailable";
+                break;
+            case MQTT_CONNECT_BAD_CREDENTIALS:
+                root["mqtt_status"] = "bad credentials";
+                break;
+            case MQTT_CONNECT_UNAUTHORIZED:
+                root["mqtt_status"] = "unauthorized";
+                break;
+            default:
+                root["mqtt_status"] = "unknown error";
+                break;
+        }
+    }
+   
+    addSensorsObj(m_sensors.sensormap(), root);
+
+    char* pJsonBuffer = (char*) malloc(800);
+    serializeJson(root, pJsonBuffer, 800);
+    return pJsonBuffer;
+}
+
 char* getStatusJson() {
     StaticJsonDocument<500> doc;
     JsonObject root = doc.to<JsonObject>();
@@ -745,19 +800,7 @@ void setup() {
 #endif
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        //char* pBuffer = new char[300];
-        //strcpy(pBuffer, KINDEX_HTML);
-        
-        //request->send_P(200, "text/html", KINDEX_HTML);
-
-        //delete pBuffer;
-        //Serial.println("done sending");
-        //Serial.flush();
-
-        AsyncResponseStream *response = request->beginResponseStream("text/html");
-        response->printf_P(KINDEX_HTML, m_settings.m_deviceHostname);
-        //send the response last
-        request->send(response);
+        request->send_P(200, "text/html", KINDEX_HTML);
     });
     server.on("/info", HTTP_GET, [](AsyncWebServerRequest *request){
         char* pJsonBuffer = infoJson();
@@ -766,6 +809,13 @@ void setup() {
     });
     server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
         char* pJsonBuffer = getStatusJson();
+        request->send(200, "application/json", pJsonBuffer);
+        free(pJsonBuffer);
+    });
+    server.on("/wstatus", HTTP_GET, [](AsyncWebServerRequest *request){
+        char* pJsonBuffer = getWStatusJson();
+        Serial.println("sending wstatus");
+        Serial.println(pJsonBuffer);
         request->send(200, "application/json", pJsonBuffer);
         free(pJsonBuffer);
     });
