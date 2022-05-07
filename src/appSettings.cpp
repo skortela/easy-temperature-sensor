@@ -24,14 +24,14 @@ AppSettings::~AppSettings()
 
 void AppSettings::clear()
 {
-    delete m_deviceHostname;
+    free(m_deviceHostname);
     m_deviceHostname = NULL;
-    delete m_mqtt_server;
+    free(m_mqtt_server);
     m_mqtt_server = NULL;
     m_mqtt_port = KDefaultMqttPort;
-    delete m_mqtt_user;
+    free(m_mqtt_user);
     m_mqtt_user = NULL;
-    delete m_mqtt_passw;
+    free(m_mqtt_passw);
     m_mqtt_passw = NULL;
 
     if (m_availabilityTopic) {
@@ -72,7 +72,7 @@ void AppSettings::print()
 
 void AppSettings::setDeviceHostname(const char* pHostname)
 {
-    delete m_deviceHostname;
+    free(m_deviceHostname);
     m_deviceHostname = strdup(pHostname);
 
     if (m_availabilityTopic)
