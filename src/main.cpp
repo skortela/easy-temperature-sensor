@@ -38,7 +38,6 @@
 #define ST(A) #A
 #define STR(A) ST(A)
 
-//static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><h1>%s</h1><br><a href=\"sensors\">View sensors</a></body></html>";
 static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html lang=\"en\"><head> <meta charset=\"UTF-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/> <title></title> <link rel=\"icon\" href=\"data:,\"></head><body><style>.block_main{margin: auto; width: 60%; /* border: 5px solid #FFFF00; */ padding: 10px; font-size: x-large;}.block_container{text-align:left; padding-top: 15px;}.block_right{display:inline;}.block_right_green{display:inline; color: green;}.block_right_red{display:inline; color: red;}.block_left{display:inline-block; width: 200px; /* border: 5px solid #FFFF00; */}</style><div class=\"block_main\"> <div class=\"block_container\"> <h1></h1><br><div class=\"block_left\">MQTT status:</div><div class=\"block_right\" id=\"mqtt_status\"></div></div><div class=\"block_container\" id=\"sensors\"></div></div></body><script>function refreshTimeout(){\"visible\"===document.visibilityState&&(reloadData(),setTimeout(refreshTimeout,5e3))}function reloadData(){fetch(\"wstatus\").then(e=>{if(200===e.status)e.json().then(e=>populateByJson(e));else{if(401!==e.status)throw\"http_err\";location.reload()}}).catch(e=>{document.getElementById(\"mqtt_status\").innerText=\"\",document.getElementById(\"sensors\").innerHTML=\"<p>Network error!</p>\"})}function populateByJson(e){document.title=e.hostname,document.querySelector(\"h1\").innerHTML=e.hostname;let t=document.getElementById(\"mqtt_status\");t.innerText=e.mqtt_status,\"connected\"==e.mqtt_status?t.className=\"block_right_green\":t.className=\"block_right_red\";let n=document.getElementById(\"sensors\");n.innerHTML=\"\";let o=e.sensors;if(o.length>0)for(i=0;i<o.length;i++){let e=document.createElement(\"div\");e.className=\"block_container\";let t=document.createElement(\"div\");t.className=\"block_left\",t.textContent=o[i].name+\": \",e.appendChild(t),t=document.createElement(\"div\"),!0===o[i].available?(t.textContent=o[i].temperature+\" ℃\",t.className=\"block_right\"):(t.textContent=\"Not connected\",t.className=\"block_right_red\"),e.appendChild(t),n.appendChild(e)}else n.innerHTML=\"<p>No sensors connected!</p>\"}window.onload=function(){refreshTimeout()},document.addEventListener(\"visibilitychange\",function(){\"visible\"===document.visibilityState&&refreshTimeout()});</script></html>";
 
 AsyncWebServer server(80);
@@ -504,7 +503,7 @@ void printAddress(DeviceAddress deviceAddress)
 
 char* infoJson()
 {
-    StaticJsonDocument<800> doc;
+    StaticJsonDocument<1500> doc;
     JsonObject root = doc.to<JsonObject>();
 
     root["ip"] = WiFi.localIP().toString();
@@ -513,8 +512,8 @@ char* infoJson()
 
     addSensorsObj(m_sensors.sensormap(), root);
 
-    char* jsonBuffer = (char*)malloc(800);
-    serializeJson(root, jsonBuffer, 800);
+    char* jsonBuffer = (char*)malloc(1500);
+    serializeJson(root, jsonBuffer, 1500);
     return jsonBuffer;
 }
 
@@ -542,7 +541,7 @@ char* getConfig() {
 }
 
 char* getWStatusJson() {
-    StaticJsonDocument<500> doc;
+    StaticJsonDocument<1500> doc;
     JsonObject root = doc.to<JsonObject>();
 
     root["hostname"] = m_settings.m_deviceHostname;
@@ -562,7 +561,7 @@ char* getWStatusJson() {
                 root["mqtt_status"] = "connection failed";
                 break;
             case MQTT_DISCONNECTED:
-                root["mqtt_status"] = "disconnect";
+                root["mqtt_status"] = "disconnected";
                 break;
             case MQTT_CONNECTED:
                 root["mqtt_status"] = "connected";
@@ -590,13 +589,13 @@ char* getWStatusJson() {
    
     addSensorsObj(m_sensors.sensormap(), root);
 
-    char* pJsonBuffer = (char*) malloc(800);
-    serializeJson(root, pJsonBuffer, 800);
+    char* pJsonBuffer = (char*) malloc(1500);
+    serializeJson(root, pJsonBuffer, 1500);
     return pJsonBuffer;
 }
 
 char* getStatusJson() {
-    StaticJsonDocument<500> doc;
+    StaticJsonDocument<1500> doc;
     JsonObject root = doc.to<JsonObject>();
 
     const node_t* pSensor = m_sensors.sensormap()->begin();
@@ -655,8 +654,8 @@ char* getStatusJson() {
         }
 	}
     #endif
-    char* pJsonBuffer = (char*) malloc(500);
-    serializeJson(root, pJsonBuffer, 500);
+    char* pJsonBuffer = (char*) malloc(1500);
+    serializeJson(root, pJsonBuffer, 1500);
     return pJsonBuffer;
 }
 
@@ -723,6 +722,84 @@ void mqtt_reconnect() {
         }
     }
     m_led_ticker.detach();
+}
+
+bool save_mqtt(const JsonObject& jsonObj)
+{
+    if (!jsonObj.containsKey("mqtt_server") 
+        || !jsonObj.containsKey("mqtt_user")
+        || !jsonObj.containsKey("mqtt_pass") ) {
+        // required fields missing
+        return false;
+    }
+    
+
+    int port;
+
+    const char* strServer = jsonObj["mqtt_server"];
+    if (strServer == NULL || strlen(strServer) == 0) {
+        // ok, clear mqtt
+        free(m_settings.m_mqtt_server);
+        m_settings.m_mqtt_server = NULL;
+        free(m_settings.m_mqtt_user);
+        m_settings.m_mqtt_user = NULL;
+        free(m_settings.m_mqtt_passw);
+        m_settings.m_mqtt_passw = NULL;
+
+        saveConfig();
+        m_mqttClient.disconnect();
+
+        return true;
+    }
+
+    char* pos = strrchr(strServer, ':');
+    if (pos == NULL) { // port not defined, using default
+        port = 1883;
+    }
+    else if (strlen(pos) < 2) {
+        // failed
+        return false;
+    }
+    else {
+        pos++;
+        port = atoi(pos);
+        if (port < 1 || port > 65535) {
+            // failed
+            return false;
+        }
+    }
+
+    char* mqtt_server;
+    if (pos == NULL) {
+        mqtt_server = strdup(strServer);
+    }
+    else {
+        mqtt_server = strndup(strServer, pos-strServer-1);
+    }
+
+    if (strlen(mqtt_server) == 0) {
+        free(mqtt_server);
+        return false;
+    }
+    
+    Serial.print("server: ");
+    Serial.println(mqtt_server);
+    Serial.print("port: ");
+    Serial.println(port);
+
+    free(m_settings.m_mqtt_server);
+    free(m_settings.m_mqtt_user);
+    free(m_settings.m_mqtt_passw);
+
+    m_settings.m_mqtt_server = mqtt_server;
+    m_settings.m_mqtt_port = port;
+    m_settings.m_mqtt_user = strdup(jsonObj["mqtt_pass"]);
+    m_settings.m_mqtt_passw = strdup(jsonObj["mqtt_server"]);
+    
+    saveConfig();
+    m_mqttClient.disconnect();
+    
+    return true;
 }
 
 void setup() {
@@ -792,7 +869,7 @@ void setup() {
     wifiSetup();
 #endif
 
-    m_mqttClient.setBufferSize(800);
+    m_mqttClient.setBufferSize(1500);
     m_mqttClient.setCallback(mqtt_message_received);
 
 #ifdef ENABLE_OTA
@@ -832,22 +909,18 @@ void setup() {
         free(pJsonBuffer);
     });
 
-    /*AsyncCallbackJsonWebHandler* handler = new AsyncCallbackJsonWebHandler("/set", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    AsyncCallbackJsonWebHandler* handler = new AsyncCallbackJsonWebHandler("/save_mqtt", [](AsyncWebServerRequest *request, JsonVariant &json) {
         const JsonObject& jsonObj = json.as<JsonObject>();
-        if (jsonObj.containsKey("main_power")) {
-            setMainPower(jsonObj["main_power"]);
-        }
-        if (jsonObj.containsKey("water_wanted")) {
-            m_settings.m_temperature_mode_normal = jsonObj["water_wanted"];
-            saveConfig();
-        }
 
-        char* jsonBuffer = new char[300];
-        getStatus(jsonBuffer);
-        request->send(200, "application/json", jsonBuffer);
-        delete jsonBuffer;
+        save_mqtt(jsonObj);
+        
+        char* pJsonBuffer = getWStatusJson();
+        Serial.println("sending wstatus");
+        Serial.println(pJsonBuffer);
+        request->send(200, "application/json", pJsonBuffer);
+        free(pJsonBuffer);
     });
-    server.addHandler(handler);*/
+    server.addHandler(handler);
 
     server.onNotFound( [](AsyncWebServerRequest *request) {
         request->send(404, "text/plain", "Not found");
