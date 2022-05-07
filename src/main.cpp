@@ -601,7 +601,11 @@ char* getStatusJson() {
     const node_t* pSensor = m_sensors.sensormap()->begin();
     while(pSensor) {
         if (pSensor->averageTemp.isValid()) {
+#ifdef USE_ROUND
+            root[pSensor->pName] = round1(pSensor->averageTemp.value() + pSensor->offset);
+#else
             root[pSensor->pName] = pSensor->averageTemp.value() + pSensor->offset;
+#endif
         }
         else {
             root[pSensor->pName] = nullptr;

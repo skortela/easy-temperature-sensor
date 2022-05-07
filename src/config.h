@@ -31,4 +31,6 @@ const int32_t KConfigValidationMagic = 0x09278269;
 
 #define KHADiscoveryPrefix "homeassistant"
 
+#define USE_ROUND
+
 #endif
