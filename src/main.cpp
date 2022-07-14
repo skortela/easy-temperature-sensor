@@ -38,8 +38,8 @@
 #define ST(A) #A
 #define STR(A) ST(A)
 
-static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html lang=\"en\"><head> <meta charset=\"UTF-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/> <title></title> <link rel=\"icon\" href=\"data:,\"></head><body><style>.block_main{margin: auto; width: 60%; /* border: 5px solid #FFFF00; */ padding: 10px; font-size: x-large;}.block_container{text-align:left; padding-top: 15px;}.block_right{display:inline;}.block_right_green{display:inline; color: green;}.block_right_red{display:inline; color: red;}.block_left{display:inline-block; width: 200px; /* border: 5px solid #FFFF00; */}</style><div class=\"block_main\"> <div class=\"block_container\"> <h1></h1><br><div class=\"block_left\">MQTT status:</div><div class=\"block_right\" id=\"mqtt_status\"></div></div><div class=\"block_container\" id=\"sensors\"></div></div></body><script>function refreshTimeout(){\"visible\"===document.visibilityState&&(reloadData(),setTimeout(refreshTimeout,5e3))}function reloadData(){fetch(\"wstatus\").then(e=>{if(200===e.status)e.json().then(e=>populateByJson(e));else{if(401!==e.status)throw\"http_err\";location.reload()}}).catch(e=>{document.getElementById(\"mqtt_status\").innerText=\"\",document.getElementById(\"sensors\").innerHTML=\"<p>Network error!</p>\"})}function populateByJson(e){document.title=e.hostname,document.querySelector(\"h1\").innerHTML=e.hostname;let t=document.getElementById(\"mqtt_status\");t.innerText=e.mqtt_status,\"connected\"==e.mqtt_status?t.className=\"block_right_green\":t.className=\"block_right_red\";let n=document.getElementById(\"sensors\");n.innerHTML=\"\";let o=e.sensors;if(o.length>0)for(i=0;i<o.length;i++){let e=document.createElement(\"div\");e.className=\"block_container\";let t=document.createElement(\"div\");t.className=\"block_left\",t.textContent=o[i].name+\": \",e.appendChild(t),t=document.createElement(\"div\"),!0===o[i].available?(t.textContent=o[i].temperature+\" ℃\",t.className=\"block_right\"):(t.textContent=\"Not connected\",t.className=\"block_right_red\"),e.appendChild(t),n.appendChild(e)}else n.innerHTML=\"<p>No sensors connected!</p>\"}window.onload=function(){refreshTimeout()},document.addEventListener(\"visibilitychange\",function(){\"visible\"===document.visibilityState&&refreshTimeout()});</script></html>";
-
+static const char KINDEX_HTML[] PROGMEM = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/> <title></title> <link rel=\"icon\" href=\"data:,\"></head><body><style>.block_main{margin: auto; width: 60%; /* border: 5px solid #FFFF00; */ padding: 10px; font-size: x-large;}.block_container{text-align:left; padding-top: 15px;}.block_right{display:inline;}.block_right_green{display:inline; color: green;}.block_right_red{display:inline; color: red;}.block_left{display:inline-block; width: 200px; /* border: 5px solid #FFFF00; */}</style><div class=\"block_main\"> <div class=\"block_container\"> <h1></h1><br><div class=\"block_left\">MQTT status:</div><div class=\"block_right\" id=\"mqtt_status\"></div></div><div class=\"block_container\" id=\"sensors\"></div></div></body><script>function refreshTimeout(){\"visible\"===document.visibilityState&&(reloadData(),setTimeout(refreshTimeout,5e3))}function reloadData(){fetch(\"wstatus\").then(e=>{if(200===e.status)e.json().then(e=>populateByJson(e));else{if(401!==e.status)throw\"http_err\";location.reload()}}).catch(e=>{document.getElementById(\"mqtt_status\").innerText=\"\",document.getElementById(\"sensors\").innerHTML=\"<p>Network error!</p>\"})}function populateByJson(e){document.title=e.hostname,document.querySelector(\"h1\").innerHTML=e.hostname;let t=document.getElementById(\"mqtt_status\");t.innerText=e.mqtt_status,\"connected\"==e.mqtt_status?t.className=\"block_right_green\":t.className=\"block_right_red\";let n=document.getElementById(\"sensors\");n.innerHTML=\"\";let o=e.sensors;if(o.length>0)for(i=0;i<o.length;i++){let e=document.createElement(\"div\");e.className=\"block_container\";let t=document.createElement(\"div\");t.className=\"block_left\",t.textContent=o[i].name+\": \",e.appendChild(t),t=document.createElement(\"div\"),!0===o[i].available?(t.textContent=o[i].temperature+\" ℃\",t.className=\"block_right\"):(t.textContent=\"Not connected\",t.className=\"block_right_red\"),e.appendChild(t),n.appendChild(e)}else n.innerHTML=\"<p>No sensors connected!</p>\"}window.onload=function(){refreshTimeout()},document.addEventListener(\"visibilitychange\",function(){\"visible\"===document.visibilityState&&refreshTimeout()});</script></html>";
+static const char KRESET_HTML[] PROGMEM = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title></title></head><body><p>Factory reset done. Device will reboot now.</p></body></html>";
 AsyncWebServer server(80);
 DNSServer dns;
 
@@ -60,6 +60,7 @@ Sensors m_sensors;
 
 unsigned long m_lastStatusUpdate;
 unsigned long m_lastInfoUpdate;
+unsigned long m_factoryResetRequestedTs = 0; // time of when factory reset was requested, if any
 
 
 void blink() {
@@ -376,7 +377,7 @@ void wifiSetup()
 
     bool ok = WiFi.hostname(m_settings.m_deviceHostname);
     if (!ok) {
-        Serial.println("Failed to se hostname!");
+        Serial.println("Failed to set hostname!");
     }
 
 
@@ -912,6 +913,12 @@ void setup() {
         request->send(200, "application/json", pJsonBuffer);
         free(pJsonBuffer);
     });
+    server.on("/freset", HTTP_GET, [](AsyncWebServerRequest *request){
+        Serial.println("Factory reset requested!");
+        request->send_P(200, "text/html", KRESET_HTML);
+        // execute asynchoronously, so we are able to send http response.
+        m_factoryResetRequestedTs = millis();
+    });
 
     AsyncCallbackJsonWebHandler* handler = new AsyncCallbackJsonWebHandler("/save_mqtt", [](AsyncWebServerRequest *request, JsonVariant &json) {
         const JsonObject& jsonObj = json.as<JsonObject>();
@@ -961,5 +968,13 @@ void loop() {
         // send status update
         sendState();
         m_lastStatusUpdate = now;
+    }
+
+    if (m_factoryResetRequestedTs > 0 && (unsigned long) (now - m_factoryResetRequestedTs) > 200 ) {
+        // Do factory reset
+        resetConfig();
+        WiFi.disconnect(true);
+        ESP.reset();
+        delay(1000);
     }
 }
