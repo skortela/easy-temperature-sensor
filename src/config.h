@@ -12,9 +12,10 @@
 
 #define KResetPin D5
 // Define one wire bus count
-#define ONE_WIRE_BUS_COUNT 2
+#define ONE_WIRE_BUS_COUNT 6
 // Define one wire bus pins
-static const int8_t KOneWirePin[] = {D4, D2};
+//static const int8_t KOneWirePin[] = {D4, D2};
+static const int8_t KOneWirePin[] = {D1, D2, D3, D4, D6, D7};
 
 #define KDefaultMqttPort 1883
 
